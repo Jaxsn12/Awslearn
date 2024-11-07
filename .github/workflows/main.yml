@@ -1,0 +1,58 @@
+name: Deploy Lambda and Infrastructure
+
+on:
+  push:
+    branches:
+      - main  # Trigger this workflow on pushes to the main branch
+  pull_request:
+    branches:
+      - main  # Trigger on pull requests to the main branch
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      # Step 1: Check out the repository code
+      - name: Checkout code
+        uses: actions/checkout@v2
+
+      # Step 2: Set up Node.js (only needed if using Node.js for Lambda)
+      - name: Setup Node.js
+        uses: actions/setup-node@v2
+        with:
+          node-version: '18'
+
+      # Step 3: Install dependencies (only if Lambda uses Node.js)
+      - name: Install dependencies
+        run: |
+          cd lambda
+          npm install
+
+      # Step 4: Set up AWS CLI
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v2
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ secrets.AWS_REGION }}
+
+      # Step 5: Zip the Lambda function code
+      - name: Prepare Lambda zip
+        run: |
+          cd lambda
+          zip -r ../lambda.zip .
+
+      # Step 6: Deploy Infrastructure with Terraform
+      - name: Terraform Init
+        working-directory: ./terraform
+        run: terraform init
+
+      - name: Terraform Apply
+        working-directory: ./terraform
+        run: terraform apply -auto-approve
+
+      # Step 7: Update Lambda Function Code
+      - name: Update Lambda function code
+        run: |
+          aws lambda update-function-code --function-name image-resizer --zip-file fileb://lambda.zip
